@@ -1,0 +1,42 @@
+{
+	"main": {
+		"flags": ["-Wall", "-Werror", "-std=c99"],
+		"defines": ["R3_BUILD_DLL"],
+
+		"includes": [".", "external"],
+		"sources": ["libECX/src/*.c"],
+		"libraries": {"r3kit": "external/bin"},
+
+		"name": "libECX",
+		"type": "dll",
+		"dest": "build"
+	},
+	
+	"static": {
+		"flags": ["-Wall", "-Werror", "-std=c99"],
+		"defines": ["R3_BUILD_DLL"],
+
+		"includes": [".", "external"],
+		"sources": ["libECX/src/*.c"],
+		"libraries": {"r3kit": "external/bin"},
+
+		"name": "libECX",
+		"type": "lib",
+		"dest": "build"
+	},
+	
+	"tests": {
+		"flags": ["-Wall", "-Werror", "-std=c99"],
+
+		"includes": [".", "external"],
+		"sources": ["tests/*.c"],
+		"libraries": {
+			"libECX": "build",
+			"r3kit": "external/bin"
+		},
+
+		"name": null,
+		"type": "exe",
+		"dest": "build"
+	}
+}
