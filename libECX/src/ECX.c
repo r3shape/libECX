@@ -17,6 +17,7 @@ static struct ECX {
     struct {
         u32 next;          // next entity handle
         u32 count;         // alive entity count
+        Array gen;         // array of entity generations
         Array free;        // array of free entity handles
         Array mask;        // array of entity component masks
     } entity;
@@ -85,34 +86,57 @@ static inline ECXEntity _packEntity(ECXEntity e, u16 g, u16 s, u8 a) {
     return ((e >> 0) & 0x1);
 }
 
+// fnv1a
+static inline u32 _hashv1(char* v) {
+	if (v) { u32 o = 2166136261u;
+        do { o ^= (char)*v++; o *= 16777619u; }
+        while (*v); return o;
+    } else return I32_MAX;
+}
+
+// TODO: components store a dense array of bound entity handles
+// allowing bit-mask queries to be a simple filter before pushing
+// the bound entity handles to the iterable -- systems then have O(1) lookups
+// into any component (getFieldArray[entity]).
 ECXEntity newEntity(none) {
-    ECXEntity e = 0;
+    u32 id = 0;
+    u8 freed = 0;
     if (r3_arr_count(&ECX.entity.free)) {
-        if (!r3_arr_pop(&e, &ECX.entity.free)) {
+        if (!r3_arr_pop(&id, &ECX.entity.free)) {
             r3_log_stdout(ERROR_LOG, "[ECX] Failed `newEntity` -- entity internal array pop failed\n");
             return 0;
         }
-        // keep ID -- bump generation -- new salt ~@zafflins 9/15/25
-        e = _packEntity(_entityID(e), _entityGEN(e)+1, 1234, 1);
-    } else {
-        // increment next -- then assign (preserves zero as an invalid entity ID) ~@zafflins 9/15/25
-        e = _packEntity((ECXEntity)++ECX.entity.next, 1, 1234, 1);
+        freed = 1;
+    } else { id = ++ECX.entity.next; }
+    
+    u16 gen = 0;
+    if (!r3_arr_read(id - 1, &gen, &ECX.entity.gen)) {
+        r3_log_stdout(ERROR_LOG, "[ECX] Failed `newEntity` -- entity internal array read failed\n");
+        if (freed) {
+            if (!r3_arr_push(&id, &ECX.entity.free)) {
+                r3_log_stdout(ERROR_LOG, "[ECX] Failed `newEntity` -- entity internal array push failed\n");
+                return 0;
+            }
+        } else { --ECX.entity.next; }
+        return 0;
     }
-
+    
     ECX.entity.count++;
-    return e;
+    return _packEntity(id, gen, 1234, 1);
 }
 
 u8 delEntity(ECXEntity entity) {
     u32 id = _entityID(entity);
-    if (!id || id > ECX.entity.next) {
-        r3_log_stdoutf(WARN_LOG, "[ECX] Skipping `delEntity` -- invalid entity: %d\n", id);
+    u16 gen = _entityGEN(entity);
+    if (!id || id > ECX.entity.next || gen != ((u16*)ECX.entity.gen.data)[id - 1]) {
+        r3_log_stdoutf(WARN_LOG, "[ECX] Skipping `delEntity` -- invalid entity: (id)%d (gen)%d\n", id, gen);
         return 1;
-    } id--; // we preserve zero, so subtract one from id
+    }
     
-    // points to scoped entity ~@zafflins 9/15/25
-    if (!r3_arr_push(&entity, &ECX.entity.free) ||
-        !r3_arr_write(id, &(u64){0}, &ECX.entity.mask)) {   // clear entity-component mask
+    gen++; // bump generation
+    if (!r3_arr_push(&id, &ECX.entity.free)             ||
+        !r3_arr_write(id - 1, &gen, &ECX.entity.gen)    ||
+        !r3_arr_write(id - 1, &(u64){0}, &ECX.entity.mask)) {   // clear entity-component mask
         r3_log_stdout(ERROR_LOG, "[ECX] Failed `delEntity` -- entity internal array push/write failed\n");
         return 0;
     }
@@ -170,8 +194,7 @@ ECXComponent newComponent(ECXComponentDesc comp) {
     
     u64 offset = 0;
     FOR(u8, field, 0, comp.fields, 1) {
-        // TODO: 32-bit fnv1a comp.fieldv[field].hash
-        fieldHashes[field] = 42069;
+        fieldHashes[field] = _hashv1(comp.fieldv[field].hash);
         fieldOffsets[field] = offset;
         fieldStrides[field] = comp.fieldv[field].stride;
         
@@ -267,7 +290,8 @@ u8 ECXInit(u32 entityMax) {
 
     // init entity internal
     if (!entityMax || entityMax > ECX_ENTITY_MAX ||
-        !r3_arr_alloc(entityMax, sizeof(ECXEntity), &ECX.entity.free) ||
+        !r3_arr_alloc(entityMax, sizeof(u16), &ECX.entity.gen)  ||
+        !r3_arr_alloc(entityMax, sizeof(u32), &ECX.entity.free) ||
         !r3_arr_alloc(entityMax, sizeof(u64), &ECX.entity.mask)) {
         r3_log_stdout(ERROR_LOG, "[ECX] Error during init -- internal entity array alloc failed\n");
         return ECXExit();
@@ -309,7 +333,8 @@ u8 ECXExit(none) {
     }
 
     // exit entity internal
-    if (!r3_arr_dealloc(&ECX.entity.free) ||
+    if (!r3_arr_dealloc(&ECX.entity.gen)  ||
+        !r3_arr_dealloc(&ECX.entity.free) ||
         !r3_arr_dealloc(&ECX.entity.mask)) {
             r3_log_stdout(ERROR_LOG, "[ECX] Error during exit -- internal entity array dealloc failed\n");
     }

@@ -1,6 +1,7 @@
 bin/
 tests/
 build/
+Debug/
 .cache/
 .vscode/
 compile_commands.json
