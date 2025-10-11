@@ -44,7 +44,26 @@ The dynamic querying system that drives runtime iteration.
 * Deallocations are explicit; no GC or implicit compaction occurs.
 * Incremental updates preserve O(1) cache coherence for hot entities and systems.
 
----
+
+## libECX 1.0.0 Benchmark
+
+Performance measured on **1,000,000 entities** with multi-component queries and mutation passes:
+
+| Operation                                | Time (ms) | Throughput                |
+| ---------------------------------------- | --------- | ------------------------- |
+| **Entity spawn + bind**                  | 48-49     | ~20.7M entities/sec       |
+| **Query build (single/multi-component)** | 8–9       | >100M checks/sec          |
+| **Cold iteration (1M entities)**         | 6.0-6.3   | ~165M iterations/sec      |
+| **Hot iteration (100× cached)**          | 5.8-6.2   | 161M/sec                  |
+| **Sparse query iteration (~10% active)** | 5.9-6.7   | Efficient sparse handling |
+| **Mutation pass (pos += vel)**           | 205-224   | Real 3D vector updates    |
+
+**Highlights:**
+
+* **High-throughput ECS:** Millions of entities spawned, queried, and iterated at extreme speeds.
+* **Sparse queries supported:** Efficient handling of partial active component sets.
+* **Cache-friendly SoA design:** Minimal overhead for hot/cold passes.
+* **Real-world mutations:** Read/write operations on vectors remain performant.
 
 ## Runtime Flow
 
@@ -73,8 +92,6 @@ ECXConfig cfg = query((ECXQueryDesc){ .all = (1 << 0) });
 iter(cfg, sys, NULL);
 ```
 
----
-
 ## Key Properties
 
 | Feature                 | Description                                                                |
@@ -87,8 +104,6 @@ iter(cfg, sys, NULL);
 | **Arena-Based**         | All component fields allocated contiguously in arena memory.               |
 | **Portable**            | Pure ISO C99. No platform dependencies.                                    |
 | **Integration-Ready**   | Designed for direct integration into `UFCORE.dll` as Uniform’s ECS kernel. |
-
----
 
 ## Systems and Iteration
 
@@ -108,8 +123,6 @@ void iter(ECXConfig config, ECXSystem sys, void* user);
 This allows for maximum control — systems are pure functions,
 and queries/configs act as live, incrementally updated views of entity membership.
 
----
-
 ## Example Output
 
 ```
@@ -121,8 +134,6 @@ and queries/configs act as live, incrementally updated views of entity membershi
 [r3kit::SUCCESS] e3 field 0 (x field) got: 420.69
 ```
 
----
-
 ## Future Work (v2.0 Roadmap)
 
 * **Reactive systems:** automatic config invalidation and rebuild on structural change.
@@ -130,8 +141,6 @@ and queries/configs act as live, incrementally updated views of entity membershi
 * **Thread-safe configs:** atomic bind/unbind for multi-threaded iteration.
 * **Per-component slabs:** replace linear arena with fragment-reclaiming slab allocators.
 * **Dynamic archetypes:** cached query graphs for faster filter reuse.
-
----
 
 ## Philosophy
 
@@ -145,4 +154,3 @@ Entities, components, and queries are not objects or classes — they are *handl
 All access is direct, type-stable, and explicit.
 No RTTI, no reflection, no heap fragmentation.
 
----

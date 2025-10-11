@@ -389,8 +389,8 @@ ECXConfig query(ECXQueryDesc desc) {
     ((u8*)ECX.query.cached.data)[qid - 1] = 1;
 
     // alloc per-query local/global maps
-    u32* ltg = r3_mem_alloc(entityCount * sizeof(u32), 8);
-    u32* gtl = r3_mem_alloc(entityCount * sizeof(u32), 8);
+    u32* ltg = r3_mem_alloc((ECX.entity.next + 1) * sizeof(u32), 8);
+    u32* gtl = r3_mem_alloc((ECX.entity.next + 1) * sizeof(u32), 8);
     for (u32 i = 0; i < entityCount; ++i) {
         ltg[i] = entitySet[i];
         gtl[entitySet[i]] = i;
@@ -688,15 +688,15 @@ u8 ECXInit(u32 entityMax) {
     ECX.component.count = 0;
     
     // init query internal
-    if (!r3_arr_alloc(1, sizeof(u8), &ECX.query.free)             ||
-        !r3_arr_alloc(1, sizeof(u64),  &ECX.query.all)            ||
-        !r3_arr_alloc(1, sizeof(u64),  &ECX.query.any)            ||
-        !r3_arr_alloc(1, sizeof(u64),  &ECX.query.none)           ||
-        !r3_arr_alloc(1, sizeof(u32), &ECX.query.seen)            ||
-        !r3_arr_alloc(1, sizeof(ECXConfig),  &ECX.query.config)   ||
-        !r3_arr_alloc(1, sizeof(u8),   &ECX.query.cached)         ||
-        !r3_arr_alloc(1, sizeof(u32*), &ECX.query.localToGlobal)  ||
-        !r3_arr_alloc(1, sizeof(u32*), &ECX.query.globalToLocal)) {
+    if (!r3_arr_alloc(64, sizeof(u8), &ECX.query.free)             ||
+        !r3_arr_alloc(64, sizeof(u64),  &ECX.query.all)            ||
+        !r3_arr_alloc(64, sizeof(u64),  &ECX.query.any)            ||
+        !r3_arr_alloc(64, sizeof(u64),  &ECX.query.none)           ||
+        !r3_arr_alloc(64, sizeof(u32), &ECX.query.seen)            ||
+        !r3_arr_alloc(64, sizeof(ECXConfig),  &ECX.query.config)   ||
+        !r3_arr_alloc(64, sizeof(u8),   &ECX.query.cached)         ||
+        !r3_arr_alloc(64, sizeof(u32*), &ECX.query.localToGlobal)  ||
+        !r3_arr_alloc(64, sizeof(u32*), &ECX.query.globalToLocal)) {
         r3_log_stdout(ERROR_LOG, "[ECX] Error during init -- internal query array alloc failed\n");
         return ECXExit();
     }
@@ -705,14 +705,14 @@ u8 ECXInit(u32 entityMax) {
 
     
     // init config internal
-    if (!r3_arr_alloc(1, sizeof(u16), &ECX.config.free)                 ||
-        !r3_arr_alloc(1, sizeof(u64),  &ECX.config.signature)           ||
-        !r3_arr_alloc(1, sizeof(u32*), &ECX.config.entitySet)           ||
-        !r3_arr_alloc(1, sizeof(u32),  &ECX.config.entityCount)         ||
-        !r3_arr_alloc(1, sizeof(u8*), &ECX.config.componentSet)         ||
-        !r3_arr_alloc(1, sizeof(u8),  &ECX.config.componentCount)       ||
-        !r3_arr_alloc(1, sizeof(u32*), &ECX.config.localToGlobal)       ||
-        !r3_arr_alloc(1, sizeof(u32*), &ECX.config.globalToLocal)) {
+    if (!r3_arr_alloc(64, sizeof(u16), &ECX.config.free)                 ||
+        !r3_arr_alloc(64, sizeof(u64),  &ECX.config.signature)           ||
+        !r3_arr_alloc(64, sizeof(u32*), &ECX.config.entitySet)           ||
+        !r3_arr_alloc(64, sizeof(u32),  &ECX.config.entityCount)         ||
+        !r3_arr_alloc(64, sizeof(u8*), &ECX.config.componentSet)         ||
+        !r3_arr_alloc(64, sizeof(u8),  &ECX.config.componentCount)       ||
+        !r3_arr_alloc(64, sizeof(u32*), &ECX.config.localToGlobal)       ||
+        !r3_arr_alloc(64, sizeof(u32*), &ECX.config.globalToLocal)) {
         r3_log_stdout(ERROR_LOG, "[ECX] Error during init -- internal query array alloc failed\n");
         return ECXExit();
     }
