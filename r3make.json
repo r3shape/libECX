@@ -3,7 +3,7 @@
 		"flags": ["-Wall", "-Werror", "-std=c99"],
 		"defines": ["R3_BUILD_DLL"],
 
-		"includes": [".", "external"],
+		"includes": [".", "external/include"],
 		"sources": ["libECX/src/*.c"],
 		"libraries": {"r3kit": "external/bin"},
 
@@ -16,7 +16,7 @@
 		"flags": ["-Wall", "-Werror", "-std=c99"],
 		"defines": ["R3_BUILD_DLL"],
 
-		"includes": [".", "external"],
+		"includes": [".", "external/include"],
 		"sources": ["libECX/src/*.c"],
 		"libraries": {"r3kit": "external/bin"},
 
@@ -28,7 +28,7 @@
 	"tests": {
 		"flags": ["-Wall", "-Werror", "-std=c99"],
 
-		"includes": [".", "external"],
+		"includes": [".", "external/include"],
 		"sources": ["tests/*.c"],
 		"libraries": {
 			"libECX": "build",

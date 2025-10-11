@@ -10,7 +10,8 @@
 typedef u64 ECXEntity;
 typedef u16 ECXConfig;
 typedef u8  ECXContext;
-typedef u8  ECXComponent;
+typedef u16 ECXComponent;
+typedef void (*ECXSystem)(ECXEntity entity, ptr data);
 
 typedef struct ECXFieldDesc {
     u16 stride;     // element stride
@@ -37,14 +38,16 @@ R3_API u8 delEntity(ECXEntity);
 R3_API ECXComponent newComponent(ECXComponentDesc comp);
 R3_API u8 delComponent(ECXComponent comp);
 
-R3_API ECXConfig query(ECXQueryDesc query);
+R3_API ECXConfig query(ECXQueryDesc desc);
+R3_API none iter(ECXConfig config, ECXSystem sys, ptr user);
+
 R3_API u8 bind(ECXEntity ent, ECXComponent comp);
 R3_API u8 unbind(ECXEntity ent, ECXComponent comp);
 
-R3_API u8 getFieldArray(u8 field, ptr out, ECXComponent comp);
+R3_API ptr getFieldArray(u8 field, ECXComponent comp);
 R3_API u8 getField(u8 field, ptr out, ECXEntity ent, ECXComponent comp);
 
-R3_API u8 setFieldArray(u8 field, ptr in, ECXComponent comp);
+R3_API u8 setFieldArray(u8 field, u8 in, ECXComponent comp);
 R3_API u8 setField(u8 field, ptr in, ECXEntity ent, ECXComponent comp);
 
 R3_API u8 ECXInit(u32 entityMax);
