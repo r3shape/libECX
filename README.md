@@ -123,7 +123,7 @@ and queries/configs act as live, incrementally updated views of entity membershi
 
 ---
 
-## Future Work (v0.2 Roadmap)
+## Future Work (v2.0 Roadmap)
 
 * **Reactive systems:** automatic config invalidation and rebuild on structural change.
 * **Dependency graphs:** automatic system ordering and dependency management.
