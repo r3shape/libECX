@@ -1,4 +1,4 @@
-# libECX
+# ![r3shape-labs](https://github.com/user-attachments/assets/ac634f13-e084-4387-aded-4679eb048cac)  <br> libECX
 
 **libECX** is the **runtime ECS core** of the *Uniform Engine*, designed as a **minimal, cache-aware, fully deterministic entity–component runtime** implemented in **pure C99**.
 
