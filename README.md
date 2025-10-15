@@ -2,64 +2,24 @@
 
 **libECX** an ECS implementation designed as a **minimal, cache-aware, fully deterministic entity–component runtime** implemented in **pure C99**.
 
-
-## Architectural Model
-
-The runtime consists of **five primary layers**:
-
-### 1. Entity Layer
-
-The fundamental unit of identity.
-
-* 64-bit packed handles (`id | gen | salt | alive`) ensure lifetime validation.
-* Fixed-size dense arrays store entity masks, generations, and free lists.
-* Entity validity is O(1) to check.
-* Binding is mask-based, ensuring fast component set filtering.
-
-### 2. Component Layer
-
-A SoA (Structure of Arrays) storage system for all component data.
-
-* Each component type owns a **contiguous, arena-allocated field buffer**.
-* Fields are described via `ECXFieldDesc` (`hash`, `stride`), with hash-based lookup.
-* Supports flexible field counts (e.g. position[x,y,z], color[r,g,b], etc).
-* Field offsets, strides, and hashes are precomputed — no runtime reflection.
-* Field data is accessed directly via offset arithmetic or helper methods (`getField`, `setField`).
-
-### 3. Query
-
-The dynamic querying system that drives runtime iteration.
-
-* **Queries** represent filter definitions (`all`, `any`, `none` bitmasks).
-* All component data is stored in a unified **Arena allocator**.
-* Each query maps to a config via the `query.config` table.
-* When components are bound/unbound, configs are incrementally updated in O(1).
-* `iter(config, sys, user)` provides high-performance iteration without reflection.
-
-### 4. Config Layer
-* **Configs** represent *cached entity sets* that satisfy those filters.
-* Each internal subsystem (entity, component, query, config) maintains its own pools and free lists.
-
-### 5. Composition Layer
-* **Compositions** represent *the joined component dataf* that a configuration is composed of.
-
 ## libECX 1.1.0 Benchmark
 
-Performance measured on **15,000,000 entities**:
+Performance measured on **15,000,000 entities**
 
-| Operation                                      | Time (ms) | Throughput                |
-| ---------------------------------------------- | --------- | ------------------------- |
-| **Entity spawn + bind**                        | 48-49     | ~20.7M ent/sec            |
-| **Query Configuration**                        | 100–113   | >5M ent/sec               |
-| **Query Configuration (Compose + Decompose)**  | 130-190   | >5M ent/sec               |
-| **Mutation pass (pos+vel)**                    | 480-505   | >29M ent/sec (0.5M-0.7M ent/frame @60fps) |
+| Operation                                     | Time (ms) | Throughput                                           |
+| --------------------------------------------- | --------- | ---------------------------------------------------- |
+| **Entity Spawn + Bind (pos + vel)**           | 401.8     | **37.3 M ent/sec**                                   |
+| **Query Configuration (Compose + Decompose)** | 76.7      | **13.0 M ent/sec**                                   |
+| **Move System — Single Frame (pos += vel)**   | 134.6     | **111.4 M ent/sec** (~ **1.9 M ent/frame @ 60 fps**) |
 
-**Highlights:**
+### Highlights
 
-* **High-throughput ECS:** Millions of entities spawned, queried, and iterated at extreme speeds.
-* **Sparse queries supported:** Efficient handling of partial active component sets.
-* **Cache-friendly SoA design:** Minimal overhead for hot/cold passes.
-* **Real-world mutations:** Read/write operations on vectors remain performant.
+* **`ECXComposition`:** unified component-field composition with full arena locality.
+* **Pointer-based iteration:** eliminated composition copy overhead for massive speedup.
+* **Peak throughput:** > 110 M entities/sec on single-threaded CPU workloads.
+* **Fully deterministic:** every run produces identical state evolution and timings.
+* **Memory-local design:** all component and query data share a single arena allocator.
+
 
 ## Runtime Flow
 
@@ -99,21 +59,20 @@ iter(query, sys, NULL);
 | **Reflection-Free**     | No strings or RTTI at runtime. All hashes precomputed.                     |
 | **Arena-Based**         | All component fields allocated contiguously in arena memory.               |
 | **Portable**            | Pure ISO C99. No platform dependencies.                                    |
-| **Integration-Ready**   | Designed for direct integration into `UFCORE.dll` as Uniform’s ECS kernel. |
 
 ## Systems and Iteration
 
-ECX adopts a **stateless system model**:
+libECX adopts a **stateless system model**:
 Systems are just function pointers with a consistent signature:
 
 ```c
-typedef void (*ECXSystem)(ECXEntity e, void* user);
+typedef none (*ECXSystem)(u32 index, ptr user, ECXComposition* comp);
 ```
 
 The runtime uses this lightweight iteration API:
 
 ```c
-void iter(ECXConfig config, ECXSystem sys, void* user);
+none iter(ECXQuery query, ECXSystem sys, ptr user);
 ```
 
 This allows for maximum control — systems are pure functions,

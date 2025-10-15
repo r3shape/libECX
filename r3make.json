@@ -1,6 +1,6 @@
 {
 	"main": {
-		"flags": ["-Wall", "-Werror", "-std=c99"],
+		"flags": ["-Wall", "-Werror", "-std=c99", "-O3 -march=x86-64"],
 		"defines": ["R3_BUILD_DLL"],
 
 		"includes": [".", "external/include"],
@@ -13,7 +13,7 @@
 	},
 	
 	"static": {
-		"flags": ["-Wall", "-Werror", "-std=c99"],
+		"flags": ["-Wall", "-Werror", "-std=c99", "-O3 -march=x86-64"],
 		"defines": ["R3_BUILD_DLL"],
 
 		"includes": [".", "external/include"],

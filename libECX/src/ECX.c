@@ -441,7 +441,12 @@ ECXComposition compose(ECXQuery query) {
     } else {
         u64 totalFields = 0;
         FOR(u8, c, 0, componentCount, 1) totalFields += ((u8*)ECX.component.fieldCount.data)[componentSet[c] - 1];
-        base = r3_mem_alloc(sizeof(ptr*) * componentCount + sizeof(ptr) * totalFields, 8);
+        
+        u64 size = sizeof(u64) + sizeof(ptr*) * componentCount + sizeof(ptr) * totalFields;
+        ptr head = r3_arena_alloc(size, &ECX.arena);
+        *(u64*)head = size;
+        
+        base = (u8*)head + sizeof(u64);
     }
     
     ptr** fieldSetOuter = (ptr**)base;
@@ -472,7 +477,10 @@ u8 decompose(ECXQuery query) {
         return 0;
     }
 
-    r3_mem_dealloc(((ptr***)ECX.config.fieldSet.data)[config - 1]);
+    ptr head = (ptr)((u8*)((ptr***)ECX.config.fieldSet.data)[config - 1] - sizeof(u64));
+    u64 size = *(u64*)head;
+
+    r3_arena_dealloc(size, head, &ECX.arena);
     ((ptr***)ECX.config.fieldSet.data)[config - 1] = NULL;
     return 1;
 }
@@ -493,7 +501,7 @@ none iter(ECXQuery query, ECXSystem sys, ptr user) {
     }
 
     ECXComposition comp = compose(query);
-    FOR (u32, e, 0, entityCount, 1) sys(entitySet[e], user, comp);
+    FOR (u32, e, 0, entityCount, 1) sys(entitySet[e], user, &comp); // avoid copying large compositions via pointer
 }
 
 

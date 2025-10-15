@@ -42,7 +42,7 @@ typedef struct ECXComposition {
     u8 viewCount;
 } ECXComposition;
 
-typedef none (*ECXSystem)(u32 index, ptr user, ECXComposition comp);
+typedef none (*ECXSystem)(u32 index, ptr user, ECXComposition* comp);
 
 R3_API ECXEntity newEntity(none);
 R3_API u8 delEntity(ECXEntity);
