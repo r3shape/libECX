@@ -68,6 +68,7 @@ static struct ECX {
         Array entityCount;      // array of entity counts
         Array componentSet;     // array of component IDs
         Array componentCount;   // array of component counts
+        Array fieldSet;         // array of component field arrays
         Array localToGlobal;    // ltg[local] = global (config)
         Array globalToLocal;    // gtl[global] = local (config)
     } config;
@@ -103,10 +104,7 @@ static inline u32 _hashv1(char* v) {
     } else return I32_MAX;
 }
 
-// TODO: components store a dense array of bound entity handles
-// allowing bit-mask queries to be a simple filter before pushing
-// the bound entity handles to the iterable -- systems then have O(1) lookups
-// into any component (getFieldArray[entity]).
+
 ECXEntity newEntity(none) {
     u32 id = 0;
     u8 freed = 0;
@@ -246,10 +244,10 @@ ECXComponent newComponent(ECXComponentDesc comp) {
 }
 
 u8 delComponent(ECXComponent comp) {
-    u8 id = _componentID(comp);
+    u8 cid = _componentID(comp);
     u8 gen = _componentGEN(comp);
-    if (!id || id > ECX.component.next || gen != ((u8*)ECX.component.gen.data)[id - 1]) {
-        r3_log_stdoutf(WARN_LOG, "[ECX] Skipping `delComponent` -- invalid component: (id)%d (gen)%d\n", id, gen);
+    if (!cid || cid > ECX.component.next || gen != ((u8*)ECX.component.gen.data)[cid - 1]) {
+        r3_log_stdoutf(WARN_LOG, "[ECX] Skipping `delComponent` -- invalid component: (id)%d (gen)%d\n", cid, gen);
         return 1;
     }
     
@@ -260,20 +258,20 @@ u8 delComponent(ECXComponent comp) {
     ptr fieldHash = 0;
     ptr fieldStride = 0;
     ptr fieldOffset = 0;
-    if (!(r3_arr_read(id - 1, &fieldSize, &ECX.component.fieldSize) && r3_arr_read(id - 1, &fieldCount, &ECX.component.fieldCount))
-    ||  !(r3_arr_read(id - 1, &field, &ECX.component.field) && r3_arr_read(id - 1, &fieldHash, &ECX.component.fieldHash))
-    ||  !(r3_arr_read(id - 1, &fieldStride, &ECX.component.fieldStride) && r3_arr_read(id - 1, &fieldOffset, &ECX.component.fieldOffset))
+    if (!(r3_arr_read(cid - 1, &fieldSize, &ECX.component.fieldSize) && r3_arr_read(cid - 1, &fieldCount, &ECX.component.fieldCount))
+    ||  !(r3_arr_read(cid - 1, &field, &ECX.component.field) && r3_arr_read(cid - 1, &fieldHash, &ECX.component.fieldHash))
+    ||  !(r3_arr_read(cid - 1, &fieldStride, &ECX.component.fieldStride) && r3_arr_read(cid - 1, &fieldOffset, &ECX.component.fieldOffset))
     ||  (!fieldSize && fieldCount) || (!field || !fieldHash || !fieldStride || !fieldOffset)) {
         r3_log_stdout(ERROR_LOG, "[ECX] Error during `delComponent` -- component internal array read failed\n");
         return 0;
     }
     
     if (!r3_arena_dealloc(fieldSize, field, &ECX.arena)                         ||
-        !r3_arr_write(id - 1, &(u8){0}, &ECX.component.mask)                    ||
-        !r3_arr_write(id - 1, &(u8){0}, &ECX.component.hash)                    ||
-        !r3_arr_write(id - 1, &(u8){0}, &ECX.component.fieldMax)                ||
-        !r3_arr_write(id - 1, &(u8){0}, &ECX.component.fieldSize)               ||
-        !r3_arr_write(id - 1, &(u8){0}, &ECX.component.fieldCount)              ||
+        !r3_arr_write(cid - 1, &(u8){0}, &ECX.component.mask)                    ||
+        !r3_arr_write(cid - 1, &(u8){0}, &ECX.component.hash)                    ||
+        !r3_arr_write(cid - 1, &(u8){0}, &ECX.component.fieldMax)                ||
+        !r3_arr_write(cid - 1, &(u8){0}, &ECX.component.fieldSize)               ||
+        !r3_arr_write(cid - 1, &(u8){0}, &ECX.component.fieldCount)              ||
         !r3_arena_dealloc(sizeof(u32) * fieldCount, fieldHash, &ECX.arena)      ||
         !r3_arena_dealloc(sizeof(u16) * fieldCount, fieldStride, &ECX.arena)    ||
         !r3_arena_dealloc(sizeof(u16) * fieldCount, fieldOffset, &ECX.arena)) {
@@ -289,27 +287,41 @@ u8 delComponent(ECXComponent comp) {
 
         // swap-remove component
         FOR_J(0, compCount, 1) {
-            if (compSet[j] == id) {
+            if (compSet[j] == cid) {
                 compSet[j] = compSet[--compCount];
                 ((u8*)ECX.config.componentCount.data)[i] = compCount;
                 removed = 1;
                 break;
             }
         }
-
-        // update signature
+        
+        // free cached ECXComposition data if no components in configuration
+        if (compCount == 0) decompose(i + 1);
+        
+        // update configuration signature
         if (removed) {
+            // free cached ECXComposition data if component removed
+            ptr** cached = ((ptr***)ECX.config.fieldSet.data)[i];
+            if (cached) decompose(i + 1);
+
             u64 newSig = 0;
-            FOR_K(0, compCount, 1) {
-                newSig ^= ((u64*)ECX.component.mask.data)[compSet[k] - 1];
-            }
+            FOR_K(0, compCount, 1) newSig ^= ((u64*)ECX.component.mask.data)[compSet[k] - 1];
             ((u64*)ECX.config.signature.data)[i] = newSig;
         }
     }
 
+    // update now invalid masks
+    FOR_I(0, ECX.query.count, 1) {
+        u64 cmask = ((u64*)ECX.component.mask.data)[cid - 1];
+        ((u64*)ECX.query.all.data)[i]  &= ~cmask;
+        ((u64*)ECX.query.any.data)[i]  &= ~cmask;
+        ((u64*)ECX.query.none.data)[i] &= ~cmask;
+    }
+
+
     gen++; // bump generation
-    if (!r3_arr_push(&id, &ECX.component.free) ||
-        !r3_arr_write(id - 1, &gen, &ECX.component.gen)) {
+    if (!r3_arr_push(&cid, &ECX.component.free) ||
+        !r3_arr_write(cid - 1, &gen, &ECX.component.gen)) {
         r3_log_stdout(ERROR_LOG, "[ECX] Error during `delComponent` -- component internal array push failed\n");
         return 0;
     }
@@ -319,7 +331,7 @@ u8 delComponent(ECXComponent comp) {
 }
 
 
-ECXConfig query(ECXQueryDesc desc) {
+ECXQuery query(ECXQueryDesc desc) {
     u64 all  = desc.all;
     u64 any  = desc.any;
     u64 none = desc.none;
@@ -333,6 +345,7 @@ ECXConfig query(ECXQueryDesc desc) {
         u64 qAny  = ((u64*)ECX.query.any.data)[i];
         u64 qNone = ((u64*)ECX.query.none.data)[i];
         if (qAll == all && qAny == any && qNone == none) {
+            // TODO: cache a query based on seen count, no need to store one-off queries + configs :)
             // already exists → mark seen
             ((u32*)ECX.query.seen.data)[i]++;
             return ((u16*)ECX.query.config.data)[i];
@@ -340,7 +353,7 @@ ECXConfig query(ECXQueryDesc desc) {
     }
 
     // alloc new query
-    u16 qid = ++ECX.query.next;
+    ECXQuery qid = ++ECX.query.next;
     ++ECX.query.count;
 
     r3_arr_write(qid - 1, &all,  &ECX.query.all);
@@ -356,14 +369,20 @@ ECXConfig query(ECXQueryDesc desc) {
     r3_arr_write(cid - 1, &signature, &ECX.config.signature); // all mask as the "signature" component set
 
     // alloc + compute entity set
-    u32* entitySet = r3_mem_alloc(ECX.entity.count * sizeof(u32), 8);
     u32 entityCount = 0;
-
     u64* entityMasks = (u64*)ECX.entity.mask.data;
     FOR(u32, e, 0, ECX.entity.next, 1) {
         u64 mask = entityMasks[e];
         if (((mask & all) == all) && ((mask & none) == 0) && (!any || (mask & any))) {
-            entitySet[entityCount++] = e + 1;   // ECX handles are index + 1
+            entityCount++;
+        }
+    }
+    
+    u32* entitySet = r3_mem_alloc(entityCount * sizeof(u32), 8);
+    FOR(u32, e, 0, entityCount, 1) {
+        u64 mask = entityMasks[e];
+        if (((mask & all) == all) && ((mask & none) == 0) && (!any || (mask & any))) {
+            entitySet[e] = e + 1;   // ECX handles are index + 1
         }
     }
 
@@ -399,25 +418,82 @@ ECXConfig query(ECXQueryDesc desc) {
     r3_arr_assign(qid - 1, ltg, &ECX.query.localToGlobal);
     r3_arr_assign(qid - 1, gtl, &ECX.query.globalToLocal);
 
-    return cid;
+    return qid;
 }
 
-none iter(ECXConfig config, ECXSystem sys, ptr user) {
-    if (!sys) return;
-
-    u16 cid = config;
-    if (!cid || cid > ECX.config.next) return;
-
-    u32* entitySet = ((u32**)ECX.config.entitySet.data)[cid - 1];
-    u32 entityCount = ((u32*)ECX.config.entityCount.data)[cid - 1];
-
-    if (!entitySet || !entityCount) return;
-
-    for (u32 i = 0; i < entityCount; ++i) {
-        u32 eid = entitySet[i];
-        u16 gen = ((u16*)ECX.entity.gen.data)[eid - 1];
-        sys(_packEntity(eid, gen, 1234, 1), user);
+ECXComposition compose(ECXQuery query) {
+    u16 config = ((u16*)ECX.query.config.data)[query - 1];
+    if (!query || query > ECX.query.next || !config || config > ECX.config.next) {
+        r3_log_stdoutf(ERROR_LOG, "[ECX] invalid configuration for composition -- %d\n", config);
+        return (ECXComposition){0};
     }
+
+    u8 *componentSet = ((u8**)ECX.config.componentSet.data)[config - 1];
+    u8 componentCount = ((u8*)ECX.config.componentCount.data)[config - 1];
+    if (!componentSet || !componentCount) return (ECXComposition){0};
+
+    // check for existing composition
+    u8 cached = 0;
+    ptr base = NULL;
+    if (((ptr***)ECX.config.fieldSet.data)[config - 1] != NULL) {
+        cached = 1;
+        base = ((ptr***)ECX.config.fieldSet.data)[config - 1];
+    } else {
+        u64 totalFields = 0;
+        FOR(u8, c, 0, componentCount, 1) totalFields += ((u8*)ECX.component.fieldCount.data)[componentSet[c] - 1];
+        base = r3_mem_alloc(sizeof(ptr*) * componentCount + sizeof(ptr) * totalFields, 8);
+    }
+    
+    ptr** fieldSetOuter = (ptr**)base;
+    ptr* fieldPool = (ptr*)((u8*)base + sizeof(ptr*) * componentCount);
+
+    ECXComposition comp = { .viewCount = componentCount };
+    FOR(u8, c, 0, componentCount, 1) {
+        ECXComponent component = componentSet[c];
+        ptr fields = ((ptr*)ECX.component.field.data)[component - 1];
+        u8 fieldCount = ((u8*)ECX.component.fieldCount.data)[component - 1];
+        u16* fieldOffset = ((u16**)ECX.component.fieldOffset.data)[component - 1];
+
+        fieldSetOuter[c] = fieldPool;
+        FOR(u8, f, 0, fieldCount, 1) *fieldPool++ = (ptr)((u8*)fields + fieldOffset[f]);
+
+        comp.viewSet[c].fieldSet = fieldSetOuter[c];
+        comp.viewSet[c].fieldCount = fieldCount;
+    }
+    
+    if (!cached) ((ptr***)ECX.config.fieldSet.data)[config - 1] = fieldSetOuter;
+    return comp;
+}
+
+u8 decompose(ECXQuery query) {
+    u16 config = ((u16*)ECX.query.config.data)[query - 1];
+    if (!query || query > ECX.query.next || !config || config > ECX.config.next || !((ptr***)ECX.config.fieldSet.data)[config - 1]) {
+        r3_log_stdoutf(ERROR_LOG, "[ECX] invalid configuration for decomposition -- %d\n", config);
+        return 0;
+    }
+
+    r3_mem_dealloc(((ptr***)ECX.config.fieldSet.data)[config - 1]);
+    ((ptr***)ECX.config.fieldSet.data)[config - 1] = NULL;
+    return 1;
+}
+
+
+none iter(ECXQuery query, ECXSystem sys, ptr user) {
+    u16 config = ((u16*)ECX.query.config.data)[query - 1];
+    if (!sys || !query || query > ECX.query.next || !config || config > ECX.config.next) {
+        r3_log_stdoutf(ERROR_LOG, "[ECX] Failed `iter` -- invalid system/query configuration: (sys)%p (config)%d\n", sys, query);
+        return;
+    }
+    
+    u32* entitySet = ((u32**)ECX.config.entitySet.data)[config - 1];
+    u32 entityCount = ((u32*)ECX.config.entityCount.data)[config - 1];
+    if (!entitySet || !entityCount) {
+        r3_log_stdoutf(ERROR_LOG, "[ECX] Failed `iter` -- failed internal query configuration pointer fetch: (config)%d\n", query);
+        return;
+    }
+
+    ECXComposition comp = compose(query);
+    FOR (u32, e, 0, entityCount, 1) sys(entitySet[e], user, comp);
 }
 
 
@@ -453,18 +529,20 @@ u8 bind(ECXEntity entity, ECXComponent comp) {
         u64 none = ((u64*)ECX.query.none.data)[q];
 
         if (((entityMask[eid - 1] & all) == all) && ((entityMask[eid - 1] & none) == 0) && (!any || (entityMask[eid - 1] & any))) {
-            ECXConfig cfg = ((u16*)ECX.query.config.data)[q];
-            u32* entitySet = ((u32**)ECX.config.entitySet.data)[cfg - 1];
-            u32* entityCount = &((u32*)ECX.config.entityCount.data)[cfg - 1];
+            ECXQuery query = ((u16*)ECX.query.config.data)[q];
+            u16 config = ((u16*)ECX.query.config.data)[query - 1];
+
+            u32* entitySet = ((u32**)ECX.config.entitySet.data)[config - 1];
+            u32* entityCount = &((u32*)ECX.config.entityCount.data)[config - 1];
             
             // skip if already in set
-            u32* gtl = ((u32**)ECX.config.globalToLocal.data)[cfg - 1];
+            u32* gtl = ((u32**)ECX.config.globalToLocal.data)[config - 1];
             if (gtl[eid] < *entityCount && entitySet[gtl[eid]] == eid)
                 continue;
 
             // add to dense array (O(1) append)
             entitySet[*entityCount] = eid;
-            ((u32**)ECX.config.localToGlobal.data)[cfg - 1][*entityCount] = eid;
+            ((u32**)ECX.config.localToGlobal.data)[config - 1][*entityCount] = eid;
             gtl[eid] = (*entityCount)++;
         }
     }
@@ -497,19 +575,21 @@ u8 unbind(ECXEntity entity, ECXComponent comp) {
     // apply unbind
     entityMask[eid - 1] &= ~componentMask;
 
-    // --- remove from any now-invalid configs ---
+    // update now invalid configs
     for (u16 q = 0; q < ECX.query.count; ++q) {
         u64 all  = ((u64*)ECX.query.all.data)[q];
         u64 any  = ((u64*)ECX.query.any.data)[q];
         u64 none = ((u64*)ECX.query.none.data)[q];
 
         if (!((entityMask[eid - 1] & all) == all && ((entityMask[eid - 1] & none) == 0) && (!any || (entityMask[eid - 1] & any)))) {
-            ECXConfig cfg = ((u16*)ECX.query.config.data)[q];
-            u32* entitySet = ((u32**)ECX.config.entitySet.data)[cfg - 1];
-            u32* entityCount = &((u32*)ECX.config.entityCount.data)[cfg - 1];
+            ECXQuery query = ((u16*)ECX.query.config.data)[q];
+            u16 config = ((u16*)ECX.query.config.data)[query - 1];
+
+            u32* entitySet = ((u32**)ECX.config.entitySet.data)[config - 1];
+            u32* entityCount = &((u32*)ECX.config.entityCount.data)[config - 1];
             
-            u32* gtl = ((u32**)ECX.config.globalToLocal.data)[cfg - 1];
-            u32* ltg = ((u32**)ECX.config.localToGlobal.data)[cfg - 1];
+            u32* gtl = ((u32**)ECX.config.globalToLocal.data)[config - 1];
+            u32* ltg = ((u32**)ECX.config.localToGlobal.data)[config - 1];
 
             u32 idx = gtl[eid];
             if (idx >= *entityCount) continue;
@@ -652,7 +732,7 @@ u8 ECXInit(u32 entityMax) {
     
     ECX.init = 1;
     // alloc internal arena
-    r3_arena_alloc(ECX_FIELD_DATA_MAX, &ECX.arena);
+    r3_arena_alloc(ECX_MEMORY, &ECX.arena);
     if (!ECX.arena.buffer) {
         r3_log_stdout(ERROR_LOG, "[ECX] Error during init -- internal arena alloc failed\n");
         return 0;
@@ -693,7 +773,7 @@ u8 ECXInit(u32 entityMax) {
         !r3_arr_alloc(64, sizeof(u64),  &ECX.query.any)            ||
         !r3_arr_alloc(64, sizeof(u64),  &ECX.query.none)           ||
         !r3_arr_alloc(64, sizeof(u32), &ECX.query.seen)            ||
-        !r3_arr_alloc(64, sizeof(ECXConfig),  &ECX.query.config)   ||
+        !r3_arr_alloc(64, sizeof(ECXQuery),  &ECX.query.config)   ||
         !r3_arr_alloc(64, sizeof(u8),   &ECX.query.cached)         ||
         !r3_arr_alloc(64, sizeof(u32*), &ECX.query.localToGlobal)  ||
         !r3_arr_alloc(64, sizeof(u32*), &ECX.query.globalToLocal)) {
@@ -706,6 +786,7 @@ u8 ECXInit(u32 entityMax) {
     
     // init config internal
     if (!r3_arr_alloc(64, sizeof(u16), &ECX.config.free)                 ||
+        !r3_arr_alloc(64, sizeof(ptr**), &ECX.config.fieldSet)            ||
         !r3_arr_alloc(64, sizeof(u64),  &ECX.config.signature)           ||
         !r3_arr_alloc(64, sizeof(u32*), &ECX.config.entitySet)           ||
         !r3_arr_alloc(64, sizeof(u32),  &ECX.config.entityCount)         ||
@@ -781,8 +862,11 @@ u8 ECXExit(none) {
     // exit config internal
     if (!r3_arr_dealloc(&ECX.config.free)           ||
         !r3_arr_dealloc(&ECX.config.signature)      ||
+        !r3_arr_dealloc(&ECX.config.fieldSet)       ||
         !r3_arr_dealloc(&ECX.config.entitySet)      ||
         !r3_arr_dealloc(&ECX.config.entityCount)    ||
+        !r3_arr_dealloc(&ECX.config.componentSet)   ||
+        !r3_arr_dealloc(&ECX.config.componentCount) ||
         !r3_arr_dealloc(&ECX.config.localToGlobal)  ||
         !r3_arr_dealloc(&ECX.config.globalToLocal)) {
         r3_log_stdout(ERROR_LOG, "[ECX] Error during exit -- internal query array dealloc failed\n");

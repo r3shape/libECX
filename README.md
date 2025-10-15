@@ -1,11 +1,11 @@
 # ![r3shape-labs](https://github.com/user-attachments/assets/ac634f13-e084-4387-aded-4679eb048cac)  <br> libECX
 
-**libECX** is the **runtime ECS core** of the *Uniform Engine*, designed as a **minimal, cache-aware, fully deterministic entity–component runtime** implemented in **pure C99**.
+**libECX** an ECS implementation designed as a **minimal, cache-aware, fully deterministic entity–component runtime** implemented in **pure C99**.
 
 
 ## Architectural Model
 
-The runtime consists of **four primary subsystems**:
+The runtime consists of **five primary layers**:
 
 ### 1. Entity Layer
 
@@ -26,37 +26,33 @@ A SoA (Structure of Arrays) storage system for all component data.
 * Field offsets, strides, and hashes are precomputed — no runtime reflection.
 * Field data is accessed directly via offset arithmetic or helper methods (`getField`, `setField`).
 
-### 3. Query + Config Layer
+### 3. Query
 
 The dynamic querying system that drives runtime iteration.
 
 * **Queries** represent filter definitions (`all`, `any`, `none` bitmasks).
-* **Configs** represent *cached entity sets* that satisfy those filters.
+* All component data is stored in a unified **Arena allocator**.
 * Each query maps to a config via the `query.config` table.
 * When components are bound/unbound, configs are incrementally updated in O(1).
 * `iter(config, sys, user)` provides high-performance iteration without reflection.
 
-### 4. Memory and Data Model
-
-* All component data is stored in a unified **Arena allocator**.
-* Arrays use the `r3kit::Array` API, ensuring bounds-checked, type-safe access.
+### 4. Config Layer
+* **Configs** represent *cached entity sets* that satisfy those filters.
 * Each internal subsystem (entity, component, query, config) maintains its own pools and free lists.
-* Deallocations are explicit; no GC or implicit compaction occurs.
-* Incremental updates preserve O(1) cache coherence for hot entities and systems.
 
+### 5. Composition Layer
+* **Compositions** represent *the joined component dataf* that a configuration is composed of.
 
-## libECX 1.0.0 Benchmark
+## libECX 1.1.0 Benchmark
 
-Performance measured on **1,000,000 entities** with multi-component queries and mutation passes:
+Performance measured on **15,000,000 entities**:
 
-| Operation                                | Time (ms) | Throughput                |
-| ---------------------------------------- | --------- | ------------------------- |
-| **Entity spawn + bind**                  | 48-49     | ~20.7M entities/sec       |
-| **Query build (single/multi-component)** | 8–9       | >100M checks/sec          |
-| **Cold iteration (1M entities)**         | 6.0-6.3   | ~165M iterations/sec      |
-| **Hot iteration (100× cached)**          | 5.8-6.2   | 161M/sec                  |
-| **Sparse query iteration (~10% active)** | 5.9-6.7   | Efficient sparse handling |
-| **Mutation pass (pos += vel)**           | 205-224   | Real 3D vector updates    |
+| Operation                                      | Time (ms) | Throughput                |
+| ---------------------------------------------- | --------- | ------------------------- |
+| **Entity spawn + bind**                        | 48-49     | ~20.7M ent/sec            |
+| **Query Configuration**                        | 100–113   | >5M ent/sec               |
+| **Query Configuration (Compose + Decompose)**  | 130-190   | >5M ent/sec               |
+| **Mutation pass (pos+vel)**                    | 480-505   | >29M ent/sec (0.5M-0.7M ent/frame @60fps) |
 
 **Highlights:**
 
@@ -88,8 +84,8 @@ setField(0, &(f32){123.4f}, e1, pos);
 f32 val;
 getField(0, &val, e1, pos);
 
-ECXConfig cfg = query((ECXQueryDesc){ .all = (1 << 0) });
-iter(cfg, sys, NULL);
+ECXQuery query = query((ECXQueryDesc){ .all = (1 << 0) });
+iter(query, sys, NULL);
 ```
 
 ## Key Properties
@@ -141,16 +137,3 @@ and queries/configs act as live, incrementally updated views of entity membershi
 * **Thread-safe configs:** atomic bind/unbind for multi-threaded iteration.
 * **Per-component slabs:** replace linear arena with fragment-reclaiming slab allocators.
 * **Dynamic archetypes:** cached query graphs for faster filter reuse.
-
-## Philosophy
-
-ECX was built from the ground up on a simple idea of PSOA: *Pure Structures Of Arrays.*
-
-Most ECS implementations (e.g. Flecs, EnTT, Unity DOTS) chase *flexibility through abstraction* — templating, reflection, and runtime polymorphism.
-ECX rejects this model entirely.
-
-By working at the **runtime level**, ECX makes the data itself the interface.
-Entities, components, and queries are not objects or classes — they are *handles into memory*.
-All access is direct, type-stable, and explicit.
-No RTTI, no reflection, no heap fragmentation.
-

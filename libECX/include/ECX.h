@@ -3,15 +3,15 @@
 
 #include <r3kit/include/ds/arr.h>
 
+#define ECX_MEMORY  1 * GiB
 #define ECX_ENTITY_MAX      0xFFFFFFFF
+#define ECX_FIELD_MAX       0xFF
 #define ECX_COMPONENT_MAX   0x40
-#define ECX_FIELD_DATA_MAX  1 * GiB
 
 typedef u64 ECXEntity;
-typedef u16 ECXConfig;
+typedef u16 ECXQuery;
 typedef u8  ECXContext;
 typedef u16 ECXComponent;
-typedef void (*ECXSystem)(ECXEntity entity, ptr data);
 
 typedef struct ECXFieldDesc {
     u16 stride;     // element stride
@@ -32,14 +32,29 @@ typedef struct ECXQueryDesc {
     u64 none;   // components that MAY NOT be bound
 } ECXQueryDesc;
 
+typedef struct ECXView {
+    ptr* fieldSet;
+    u16 fieldCount;
+} ECXView;
+
+typedef struct ECXComposition {
+    ECXView viewSet[ECX_COMPONENT_MAX];
+    u8 viewCount;
+} ECXComposition;
+
+typedef none (*ECXSystem)(u32 index, ptr user, ECXComposition comp);
+
 R3_API ECXEntity newEntity(none);
 R3_API u8 delEntity(ECXEntity);
 
 R3_API ECXComponent newComponent(ECXComponentDesc comp);
 R3_API u8 delComponent(ECXComponent comp);
 
-R3_API ECXConfig query(ECXQueryDesc desc);
-R3_API none iter(ECXConfig config, ECXSystem sys, ptr user);
+R3_API ECXQuery query(ECXQueryDesc desc);
+R3_API ECXComposition compose(ECXQuery config);
+R3_API u8 decompose(ECXQuery config);
+
+R3_API none iter(ECXQuery config, ECXSystem sys, ptr user);
 
 R3_API u8 bind(ECXEntity ent, ECXComponent comp);
 R3_API u8 unbind(ECXEntity ent, ECXComponent comp);
