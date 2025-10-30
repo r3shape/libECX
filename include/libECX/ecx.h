@@ -50,10 +50,10 @@ R3_PUBLIC_API ECXComponent ecxNewComponent(ECXComponentDesc comp);
 R3_PUBLIC_API u8 ecxDelComponent(ECXComponent comp);
 
 R3_PUBLIC_API ECXQuery ecxQuery(ECXQueryDesc desc);
-R3_PUBLIC_API ECXComposition ecxCompose(ECXQuery config);
-R3_PUBLIC_API u8 ecxDecompose(ECXQuery config);
+R3_PUBLIC_API ECXComposition ecxCompose(ECXQuery query);
+R3_PUBLIC_API u8 ecxDecompose(ECXQuery query);
 
-R3_PUBLIC_API none ecxIter(ECXQuery config, ECXSystem sys, ptr user);
+R3_PUBLIC_API none ecxIter(ECXQuery query, ECXSystem sys, ptr user);
 
 R3_PUBLIC_API u8 ecxBind(ECXEntity ent, ECXComponent comp);
 R3_PUBLIC_API u8 ecxUnbind(ECXEntity ent, ECXComponent comp);
