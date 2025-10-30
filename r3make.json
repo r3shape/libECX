@@ -3,40 +3,37 @@
 		"flags": ["-Wall", "-Werror", "-std=c99", "-O3 -march=x86-64"],
 		"defines": ["R3_BUILD_DLL"],
 
-		"includes": [".", "external/include"],
-		"sources": ["libECX/src/*.c"],
-		"libraries": {"r3kit": "external/bin"},
+		"includes": [".", "external"],
+		"sources": ["src/libECX/*.c"],
+		"libraries": {"R3": "external/bin"},
 
 		"name": "libECX",
 		"type": "dll",
-		"dest": "build"
+		"dest": "bin"
 	},
 	
 	"static": {
 		"flags": ["-Wall", "-Werror", "-std=c99", "-O3 -march=x86-64"],
 		"defines": ["R3_BUILD_DLL"],
 
-		"includes": [".", "external/include"],
-		"sources": ["libECX/src/*.c"],
-		"libraries": {"r3kit": "external/bin"},
+		"includes": [".", "external"],
+		"sources": ["src/libECX/*.c"],
+		"libraries": {"R3": "external/bin"},
 
 		"name": "libECX",
 		"type": "lib",
-		"dest": "build"
+		"dest": "bin"
 	},
 	
 	"tests": {
 		"flags": ["-Wall", "-Werror", "-std=c99"],
 
-		"includes": [".", "external/include"],
-		"sources": ["tests/*.c"],
-		"libraries": {
-			"libECX": "build",
-			"r3kit": "external/bin"
-		},
+		"includes": [".", "external"],
+		"sources": ["src/tests/*.c"],
+		"libraries": { "R3": "external/bin", "ECX": "bin" },
 
 		"name": null,
 		"type": "exe",
-		"dest": "build"
+		"dest": "bin"
 	}
 }

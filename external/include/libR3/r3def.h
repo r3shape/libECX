@@ -1,23 +1,27 @@
 #ifndef __R3_DEF_H__
 #define __R3_DEF_H__
 
-typedef void 			none;
-typedef void* 			ptr;
+typedef void* ptr;
+typedef void none;
 
-typedef float 			f32, f4b;
-typedef double 			f64, f8b;
+typedef float   f32;
+typedef double  f64;
 
-typedef signed char 		s8,  s1b;
-typedef signed short 		s16, s2b;
-typedef signed int 		    s32, s4b;
-typedef signed long long 	s64, s8b, sptr;
+typedef signed char           i8;
+typedef signed short          i16;
+typedef signed int            i32;
+typedef signed long long      i64;
 
-typedef unsigned char 		u8,  u1b;
-typedef unsigned short 		u16, u2b;
-typedef unsigned int 		u32, u4b;
-typedef unsigned long long 	u64, u8b, uptr;
+typedef unsigned char           u8;
+typedef unsigned short          u16;
+typedef unsigned int            u32;
+typedef unsigned long long      u64;
 
-#define R3_HEADER(h, p) ((h*)((u8*)p->data - (sizeof(h))))
+typedef enum R3Result {
+    R3_RESULT_FATAL =   -1,
+    R3_RESULT_ERROR =    0,
+    R3_RESULT_SUCCESS =  1
+} R3Result;
 
 #ifdef KB
     #undef KB
@@ -76,28 +80,30 @@ typedef unsigned long long 	u64, u8b, uptr;
 #ifndef NULL
     #ifndef _WIN64
         #define NULL 0
+        #define R3_ALIGN 4
     #else
         #define NULL 0LL
-    #endif  /* W64 */
+        #define R3_ALIGN 8
+    #endif  /* _WIN64 */
     #else
         #define NULL ((void *)0)
 #endif
 
 #ifdef R3_BUILD_DLL
     #ifdef _MSC_VER
-        #define R3_API __declspec(dllexport)
+        #define R3_PUBLIC_API __declspec(dllexport)
     #elif #defined (__GNUC__) || defined (__clang__)
-        #define R3_API __attribute__((visibility("default")))
+        #define R3_PUBLIC_API __attribute__((visibility("default")))
     #else
-        #define R3_API
+        #define R3_PUBLIC_API
     #endif
 #else
     #ifdef _MSC_VER
-        #define R3_API __declspec(dllimport)
+        #define R3_PUBLIC_API __declspec(dllimport)
     #elif defined(__GNUC__) || defined(__clang__)
-        #define R3_API __attribute__((visibility("default")))
+        #define R3_PUBLIC_API __attribute__((visibility("default")))
     #else
-        #define R3_API
+        #define R3_PUBLIC_API
     #endif
 #endif
 
