@@ -1,4 +1,5 @@
 # ![r3shape-labs](https://github.com/user-attachments/assets/ac634f13-e084-4387-aded-4679eb048cac)  <br> libECX
+| NOTE: ECX is dependant upon the [_libR3_ ](https://github.com/r3shape/libR3) runtime library, and built with [_r3make_ ](https://github.com/r3shape/r3make).
 
 **libECX** an ECS implementation designed as a **minimal, cache-aware, fully deterministic entity–component runtime** implemented in **pure C99**.
 
@@ -26,7 +27,7 @@ Performance measured on **15,000,000 entities**
 A typical runtime pass:
 
 ```c
-ECXComponent pos = newComponent((ECXComponentDesc){
+ECXComponent pos = ecxNewComponent((ECXComponentDesc){
     .mask = (1 << 0), .max = 100,
     .fields = 3,
     .fieldv = (ECXFieldDesc[]){
@@ -36,16 +37,16 @@ ECXComponent pos = newComponent((ECXComponentDesc){
     }
 });
 
-ECXEntity e1 = newEntity();
-bind(e1, pos);
+ECXEntity e1 = ecxNewEntity();
+ecxBind(e1, pos);
 
-setField(0, &(f32){123.4f}, e1, pos);
+ecxSetField(0, &(f32){123.4f}, e1, pos);
 
 f32 val;
-getField(0, &val, e1, pos);
+ecxGetField(0, &val, e1, pos);
 
-ECXQuery query = query((ECXQueryDesc){ .all = (1 << 0) });
-iter(query, sys, NULL);
+ECXQuery query = ecxQuery((ECXQueryDesc){ .all = (1 << 0) });
+ecxIter(query, sys, NULL);
 ```
 
 ## Key Properties
@@ -72,7 +73,7 @@ typedef none (*ECXSystem)(u32 index, ptr user, ECXComposition* comp);
 The runtime uses this lightweight iteration API:
 
 ```c
-none iter(ECXQuery query, ECXSystem sys, ptr user);
+none ecxIter(ECXQuery query, ECXSystem sys, ptr user);
 ```
 
 This allows for maximum control — systems are pure functions,
