@@ -12,6 +12,7 @@
 #include <include/libR3/mem/alloc.h>
 #include <include/libR3/io/log.h>
 #include <include/libECX/ecx.h>
+#include <math.h>
 
 typedef struct ECXEntityStorage {
     u32 nextID;
@@ -490,7 +491,7 @@ ECXQuery ecxQuery(ECXQueryDesc query) {
     if (!query.in) {
         r3LogStdOut(R3_LOG_ERROR, "[ECX] Failed `Query` -- invalid query descriptor passed (all queries must have at least a single `all` mask)\n");
         return I16_MAX;
-    }
+    } FOR(ECXQuery, q, 0, ECX.qs.nextID, 1) if (query.in == ECX.qs.queryIn[q] && query.ex == ECX.qs.queryEx[q]) return q;
 
     ECXQuery queryID = ECX.qs.nextID++;
     
